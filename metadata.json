@@ -1,0 +1,6 @@
+{
+  "name": "Gestão Integrada RH",
+  "description": "Plataforma SaaS Multi-Tenant para gestão de departamento pessoal, parametrização empresarial, admissão digital eSocial com LGPD e portal do colaborador.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

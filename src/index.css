@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --primary: #0A5B7A;
+    --primary-hover: #084962;
+    --secondary: #F5B800;
+    --secondary-hover: #d9a300;
+    --dark: #1E293B;
+    --light: #F8FAFC;
+  }
+
+  body {
+    background-color: #F8FAFC;
+    color: #1E293B;
+    overflow-x: hidden;
+  }
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .print-page-break {
+    page-break-after: always;
+  }
+}
