@@ -20,6 +20,7 @@ import { AtestadosFaltasView } from './views/AtestadosFaltasView';
 import { ParametrizacaoView } from './views/ParametrizacaoView';
 import { EmpresaBrandingView } from './views/EmpresaBrandingView';
 import { DatabaseAuditView } from './views/DatabaseAuditView';
+import { GoogleDriveView } from './views/GoogleDriveView';
 import { CandidatoAdmissaoView } from './views/CandidatoAdmissaoView';
 import { ColaboradorPortalView } from './views/ColaboradorPortalView';
 import { SobreVersaoView } from './views/SobreVersaoView';
@@ -178,6 +179,7 @@ function MainAppContent() {
                     {currentTab === 'parametrizacao' && <ParametrizacaoView />}
                     {currentTab === 'empresa_branding' && <EmpresaBrandingView />}
                     {currentTab === 'database_audit' && <DatabaseAuditView />}
+                    {currentTab === 'google_drive' && <GoogleDriveView />}
                   </>
                 )}
 

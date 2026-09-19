@@ -21,6 +21,7 @@ import {
   Check,
   Database,
   X,
+  Cloud,
 } from 'lucide-react';
 import { AuditLog } from '../types';
 
@@ -261,6 +262,14 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => onNavigate('google_drive')}
+            className="flex items-center space-x-2 px-3.5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+            title="Acessar Google Drive para armazenar dossiês, backups de auditoria e documentos"
+          >
+            <Cloud className="w-4 h-4 text-blue-200" />
+            <span>Google Drive</span>
+          </button>
           <button
             onClick={() => handleExportAuditCSV(true)}
             disabled={isExporting}

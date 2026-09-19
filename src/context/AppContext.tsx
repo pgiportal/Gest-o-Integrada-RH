@@ -25,6 +25,22 @@ import {
   INITIAL_FALTAS,
   INITIAL_AUDIT_LOGS,
 } from '../data/mockData';
+import {
+  escutarEmpresas,
+  escutarTodosOsUsuarios,
+  criarEmpresaFirestore,
+  atualizarEmpresaFirestore,
+  criarUsuarioFirestore,
+  buscarUsuarioPorUid,
+  semearDadosIniciaisSeVazio,
+} from '../lib/firestoreService';
+import {
+  criarContaAuth,
+  entrarComEmailSenha,
+  sairDaConta,
+  observarAuth,
+  traduzErroAuth,
+} from '../lib/authService';
 
 interface AppContextType {
   // Multi-Tenant
@@ -32,8 +48,8 @@ interface AppContextType {
   selectedEmpresaId: string;
   currentEmpresa: Empresa;
   setSelectedEmpresaId: (id: string) => void;
-  updateEmpresa: (dados: Partial<Empresa>) => void;
-  createEmpresa: (dados: Omit<Empresa, 'id' | 'criadoEm' | 'atualizadoEm'>) => Empresa;
+  updateEmpresa: (dados: Partial<Empresa>) => Promise<void>;
+  createEmpresa: (dados: Omit<Empresa, 'id' | 'criadoEm' | 'atualizadoEm'>) => Promise<Empresa>;
 
   // Parametrização
   parametros: ParametrosEmpresa[];
@@ -45,9 +61,23 @@ interface AppContextType {
   currentUser: Usuario | null;
   setCurrentUser: (user: Usuario | null) => void;
   switchUser: (usuarioId: string) => void;
-  login: (email: string, senha?: string) => boolean;
-  logout: () => void;
-  cadastrarUsuario: (dados: { nome: string; email: string; perfil?: PerfilUsuario; empresaId?: string }) => Usuario;
+  // Login real (e-mail/senha) via Firebase Authentication. Retorna uma
+  // mensagem de erro em português em caso de falha, ou null se deu certo.
+  login: (email: string, senha: string) => Promise<string | null>;
+  logout: () => Promise<void>;
+  // Cadastro de usuário. Quando `senha` é informada, cria uma conta real de
+  // login (Firebase Authentication) compartilhada entre dispositivos. Sem
+  // senha, cria apenas um perfil local (ex.: RH convidando um candidato),
+  // que ainda assim fica salvo no Firestore e visível para toda a empresa.
+  cadastrarUsuario: (dados: {
+    nome: string;
+    email: string;
+    senha?: string;
+    perfil?: PerfilUsuario;
+    empresaId?: string;
+  }) => Promise<Usuario>;
+  // true enquanto o sistema ainda está verificando se há uma sessão salva.
+  autenticando: boolean;
 
   // Admissão & LGPD
   dadosCadastrais: DadosCadastrais[];
@@ -105,9 +135,11 @@ function loadFromStorage<T>(key: string, defaultValue: T): T {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [empresas, setEmpresas] = useState<Empresa[]>(() =>
-    loadFromStorage(STORAGE_KEYS.EMPRESAS, INITIAL_EMPRESAS)
-  );
+  // empresas e usuarios agora vêm do Firestore (compartilhados entre
+  // qualquer dispositivo/navegador), em vez de ficarem só no localStorage.
+  const [empresas, setEmpresas] = useState<Empresa[]>(INITIAL_EMPRESAS);
+  const [usuarios, setUsuarios] = useState<Usuario[]>(INITIAL_USUARIOS);
+  const [autenticando, setAutenticando] = useState<boolean>(true);
 
   const [selectedEmpresaId, setSelectedEmpresaIdState] = useState<string>(() =>
     loadFromStorage(STORAGE_KEYS.SELECTED_EMPRESA, INITIAL_EMPRESAS[0]?.id || '')
@@ -117,16 +149,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadFromStorage(STORAGE_KEYS.PARAMETROS, INITIAL_PARAMETROS)
   );
 
-  const [usuarios, setUsuarios] = useState<Usuario[]>(() =>
-    loadFromStorage(STORAGE_KEYS.USUARIOS, INITIAL_USUARIOS)
-  );
-
   const [currentUser, setCurrentUserState] = useState<Usuario | null>(() => {
     const saved = loadFromStorage<Usuario | null>(STORAGE_KEYS.CURRENT_USER, null);
     if (saved) return saved;
     // Default to RH Admin for rich initial experience
     return INITIAL_USUARIOS[0] || null;
   });
+
+  // Garante que o Firestore tenha os dados de demonstração na primeira vez
+  // que o sistema roda (banco novo/vazio). Em bancos já usados, não faz nada.
+  useEffect(() => {
+    semearDadosIniciaisSeVazio(INITIAL_EMPRESAS, INITIAL_USUARIOS).catch((erro) => {
+      console.error('Falha ao semear dados iniciais no Firestore:', erro);
+    });
+  }, []);
+
+  // Mantém a lista de empresas sincronizada em tempo real com o Firestore.
+  useEffect(() => {
+    const unsubscribe = escutarEmpresas((lista) => {
+      if (lista.length > 0) {
+        setEmpresas(lista);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  // Mantém a lista de usuários de todas as empresas conhecidas sincronizada
+  // em tempo real com o Firestore.
+  useEffect(() => {
+    const empresaIds = empresas.map((e) => e.id);
+    const unsubscribe = escutarTodosOsUsuarios(empresaIds, (lista) => {
+      if (lista.length > 0) {
+        setUsuarios(lista);
+      }
+    });
+    return unsubscribe;
+  }, [empresas.map((e) => e.id).join(',')]);
+
+  // Observa o login/logout real (Firebase Authentication). Quando alguém
+  // entra com e-mail/senha em qualquer dispositivo, localizamos o perfil
+  // correspondente no Firestore e o tornamos o usuário atual da sessão.
+  useEffect(() => {
+    const unsubscribe = observarAuth(async (usuarioFirebase) => {
+      if (usuarioFirebase) {
+        try {
+          const usuarioEncontrado = await buscarUsuarioPorUid(usuarioFirebase.uid);
+          if (usuarioEncontrado) {
+            setCurrentUserState(usuarioEncontrado);
+            setSelectedEmpresaIdState(usuarioEncontrado.empresaId);
+          }
+        } catch (erro) {
+          console.error('Falha ao carregar perfil do usuário autenticado:', erro);
+        }
+      }
+      setAutenticando(false);
+    });
+    return unsubscribe;
+  }, []);
 
   const [dadosCadastrais, setDadosCadastrais] = useState<DadosCadastrais[]>(() =>
     loadFromStorage(STORAGE_KEYS.DADOS_CADASTRAIS, INITIAL_DADOS_CADASTRAIS)
@@ -157,10 +236,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   // Sync to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.EMPRESAS, JSON.stringify(empresas));
-  }, [empresas]);
-
+  // (empresas e usuarios não são mais salvos aqui — agora vivem no Firestore)
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.SELECTED_EMPRESA, JSON.stringify(selectedEmpresaId));
   }, [selectedEmpresaId]);
@@ -168,10 +244,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.PARAMETROS, JSON.stringify(parametros));
   }, [parametros]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.USUARIOS, JSON.stringify(usuarios));
-  }, [usuarios]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(currentUser));
@@ -272,20 +344,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAuditLogs((prev) => [newLog, ...prev]);
   };
 
-  const updateEmpresa = (dados: Partial<Empresa>) => {
-    setEmpresas((prev) =>
-      prev.map((emp) => {
-        if (emp.id === currentEmpresa.id) {
-          const updated = {
-            ...emp,
-            ...dados,
-            atualizadoEm: new Date().toISOString(),
-          };
-          return updated;
-        }
-        return emp;
-      })
-    );
+  const updateEmpresa = async (dados: Partial<Empresa>) => {
+    await atualizarEmpresaFirestore(currentEmpresa.id, dados);
     logAction(
       'EMPRESA_ATUALIZADA',
       'empresas',
@@ -294,18 +354,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const createEmpresa = (dados: Omit<Empresa, 'id' | 'criadoEm' | 'atualizadoEm'>): Empresa => {
-    const newId = `emp-${Date.now()}`;
-    const newEmpresa: Empresa = {
-      ...dados,
-      id: newId,
-      criadoEm: new Date().toISOString(),
-      atualizadoEm: new Date().toISOString(),
-    };
+  const createEmpresa = async (dados: Omit<Empresa, 'id' | 'criadoEm' | 'atualizadoEm'>): Promise<Empresa> => {
+    const newEmpresa = await criarEmpresaFirestore(dados);
 
     const newParam: ParametrosEmpresa = {
-      id: `param-${newId}`,
-      empresaId: newId,
+      id: `param-${newEmpresa.id}`,
+      empresaId: newEmpresa.id,
       vtDescontoPercentual: 6.0,
       vrVaValorDiario: 35.0,
       vrVaCoparticipacaoPercentual: 15.0,
@@ -324,11 +378,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       atualizadoEm: new Date().toISOString(),
     };
 
-    setEmpresas((prev) => [...prev, newEmpresa]);
     setParametros((prev) => [...prev, newParam]);
-    setSelectedEmpresaIdState(newId);
+    setSelectedEmpresaIdState(newEmpresa.id);
 
-    logAction('NOVA_EMPRESA_CRIADA', 'empresas', `Empresa ${newEmpresa.razaoSocial} cadastrada no SaaS.`, newId);
+    logAction('NOVA_EMPRESA_CRIADA', 'empresas', `Empresa ${newEmpresa.razaoSocial} cadastrada no SaaS.`, newEmpresa.id);
     return newEmpresa;
   };
 
@@ -370,52 +423,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const login = (email: string, _senha?: string): boolean => {
-    const user = usuarios.find((u) => u.email.toLowerCase() === email.toLowerCase().trim());
-    if (user) {
-      setCurrentUserState(user);
-      if (user.empresaId) {
-        setSelectedEmpresaIdState(user.empresaId);
+  const login = async (email: string, senha: string): Promise<string | null> => {
+    try {
+      const uid = await entrarComEmailSenha(email, senha);
+      const user = await buscarUsuarioPorUid(uid);
+      if (!user) {
+        return 'Conta autenticada, mas não encontramos seu perfil no sistema. Fale com o administrador da sua empresa.';
       }
+      setCurrentUserState(user);
+      setSelectedEmpresaIdState(user.empresaId);
       logAction('LOGIN_EFETUADO', 'usuarios', `Sessão iniciada pelo usuário ${user.nome} (${user.perfil}).`, user.id);
-      return true;
+      return null;
+    } catch (erro) {
+      return traduzErroAuth(erro);
     }
-    return false;
   };
 
-  const logout = () => {
+  const logout = async () => {
     if (currentUser) {
       logAction('LOGOUT_EFETUADO', 'usuarios', `Sessão encerrada pelo usuário ${currentUser.nome}.`, currentUser.id);
     }
+    await sairDaConta();
     setCurrentUserState(null);
   };
 
-  const cadastrarUsuario = (dados: {
+  const cadastrarUsuario = async (dados: {
     nome: string;
     email: string;
+    senha?: string;
     perfil?: PerfilUsuario;
     empresaId?: string;
-  }): Usuario => {
-    const newId = `usr-${Date.now()}`;
-    const newUser: Usuario = {
-      id: newId,
-      empresaId: dados.empresaId || selectedEmpresaId,
+  }): Promise<Usuario> => {
+    const empresaId = dados.empresaId || selectedEmpresaId;
+    const perfil = dados.perfil || 'CANDIDATO';
+
+    // Quando há senha, criamos uma conta real de login (Firebase
+    // Authentication), compartilhada entre qualquer dispositivo. O ID do
+    // usuário passa a ser o UID gerado pelo Firebase.
+    const usuarioId = dados.senha ? await criarContaAuth(dados.email, dados.senha) : `usr-${Date.now()}`;
+
+    const newUser = await criarUsuarioFirestore(empresaId, usuarioId, {
       nome: dados.nome,
       email: dados.email,
-      perfil: dados.perfil || 'CANDIDATO',
+      perfil,
       ativo: true,
-      criadoEm: new Date().toISOString(),
-      atualizadoEm: new Date().toISOString(),
-    };
+    });
 
-    setUsuarios((prev) => [...prev, newUser]);
     setCurrentUserState(newUser);
+    setSelectedEmpresaIdState(empresaId);
 
-    // Initial empty registration data
+    // Initial empty registration data (segue local por enquanto)
     const newDc: DadosCadastrais = {
-      id: `dc-${newId}`,
+      id: `dc-${usuarioId}`,
       empresaId: newUser.empresaId,
-      usuarioId: newId,
+      usuarioId,
       cpf: '',
       dataNascimento: '',
       estadoCivil: 'Solteiro(a)',
@@ -439,7 +500,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setDadosCadastrais((prev) => [...prev, newDc]);
 
-    logAction('USUARIO_CADASTRADO', 'usuarios', `Novo usuário cadastrado: ${newUser.nome} (${newUser.perfil}).`, newId);
+    logAction('USUARIO_CADASTRADO', 'usuarios', `Novo usuário cadastrado: ${newUser.nome} (${newUser.perfil}).`, usuarioId);
     return newUser;
   };
 
@@ -831,11 +892,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetToDefaults = () => {
-    setEmpresas(INITIAL_EMPRESAS);
-    setSelectedEmpresaIdState(INITIAL_EMPRESAS[0].id);
-    setParametros(INITIAL_PARAMETROS);
-    setUsuarios(INITIAL_USUARIOS);
-    setCurrentUserState(INITIAL_USUARIOS[0]);
+    // empresas e usuarios agora são dados compartilhados no Firestore — este
+    // botão de demonstração não deve apagá-los, para não afetar outras
+    // pessoas usando o sistema. Reseta apenas os dados que ainda são
+    // guardados localmente neste navegador.
     setDadosCadastrais(INITIAL_DADOS_CADASTRAIS);
     setDocumentos(INITIAL_DOCUMENTOS);
     setHolerites(INITIAL_HOLERITES);
@@ -843,7 +903,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAtestados(INITIAL_ATESTADOS);
     setFaltas(INITIAL_FALTAS);
     setAuditLogs(INITIAL_AUDIT_LOGS);
-    localStorage.clear();
   };
 
   return (
@@ -867,6 +926,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         login,
         logout,
         cadastrarUsuario,
+        autenticando,
 
         dadosCadastrais,
         documentos,

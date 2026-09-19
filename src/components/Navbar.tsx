@@ -48,7 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   // Group demo accounts for quick testing
   const adminUser = usuarios.find((u) => u.perfil === 'RH_ADMIN');
   const funcUser = usuarios.find((u) => u.perfil === 'FUNCIONARIO');
-  const candUser = usuarios.find((u) => u.perfil === 'CANDIDATO' && u.id === 'usr-cand-01');
+  const candUser = usuarios.find((u) => u.perfil === 'CANDIDATO');
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
@@ -68,9 +68,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   RH SaaS
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium">
-                Departamento Pessoal, Admissão & Colaborador
-              </p>
             </div>
           </div>
 

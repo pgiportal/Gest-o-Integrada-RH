@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCNPJ, formatCPF } from '../lib/formatters';
+import { traduzErroAuth } from '../lib/authService';
 import {
   Building2,
   UserPlus,
@@ -49,7 +50,37 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
     setCurrentUser,
     usuarios,
     logAction,
+    login,
   } = useApp();
+
+  const [modoLogin, setModoLogin] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginSenha, setLoginSenha] = useState('');
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+
+    if (!loginEmail.trim() || !loginSenha) {
+      setLoginError('Informe e-mail e senha para entrar.');
+      return;
+    }
+
+    setLoginLoading(true);
+    const erro = await login(loginEmail.trim(), loginSenha);
+    setLoginLoading(false);
+
+    if (erro) {
+      setLoginError(erro);
+      return;
+    }
+
+    if (onNavigate) {
+      onNavigate('dashboard');
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<'empresa' | 'candidato' | 'funcionario'>(initialTab);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
@@ -111,7 +142,7 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
   // ----------------------------------------------------
   // SUBMIT: FLUXO EMPRESA
   // ----------------------------------------------------
-  const handleSubmitEmpresa = (e: React.FormEvent) => {
+  const handleSubmitEmpresa = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: { [key: string]: string } = {};
 
@@ -139,7 +170,7 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
 
     setEmpIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       // 1. Create company
       const novaEmpresa: Omit<Empresa, 'id' | 'criadoEm' | 'atualizadoEm'> = {
         razaoSocial: empRazaoSocial.trim(),
@@ -160,12 +191,13 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
         corSecundaria: '#F5B800',
       };
 
-      const createdEmp = createEmpresa(novaEmpresa);
+      const createdEmp = await createEmpresa(novaEmpresa);
 
-      // 2. Create RH_ADMIN user
-      const adminUser = cadastrarUsuario({
+      // 2. Create RH_ADMIN user (conta real, compartilhada entre dispositivos)
+      const adminUser = await cadastrarUsuario({
         nome: empNomeResponsavel.trim(),
         email: empEmail.trim().toLowerCase(),
+        senha: empSenha,
         perfil: 'RH_ADMIN',
         empresaId: createdEmp.id,
       });
@@ -175,7 +207,6 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
 
       setSuccessMessage(`Empresa ${createdEmp.nomeFantasia} cadastrada com sucesso! Bem-vindo(a) ao painel de RH.`);
       setShowSuccessToast(true);
-      setEmpIsSubmitting(false);
 
       logAction('EMPRESA_AUTOCADASTRADA', 'empresas', `Nova empresa ${createdEmp.razaoSocial} registrada pelo onboarding.`, createdEmp.id);
 
@@ -184,7 +215,11 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
           onNavigate('dashboard');
         }
       }, 1500);
-    }, 600);
+    } catch (erro) {
+      setEmpErrors({ email: traduzErroAuth(erro) });
+    } finally {
+      setEmpIsSubmitting(false);
+    }
   };
 
   // ----------------------------------------------------
@@ -201,7 +236,7 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
     setCandIsLoadingGoogle(true);
 
     // Simulate authentic Google OAuth response
-    setTimeout(() => {
+    setTimeout(async () => {
       const targetEmp = empresas.find((e) => e.id === candEmpresaId) || empresas[0];
       const candidatoNome = candNome.trim() || 'Candidato Google Conectado';
       const candidatoEmail = candEmail.trim().toLowerCase() || 'candidato.google@gmail.com';
@@ -210,7 +245,7 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
       let user = usuarios.find((u) => u.email.toLowerCase() === candidatoEmail);
 
       if (!user) {
-        user = cadastrarUsuario({
+        user = await cadastrarUsuario({
           nome: candidatoNome,
           email: candidatoEmail,
           perfil: 'CANDIDATO',
@@ -238,7 +273,7 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
   // ----------------------------------------------------
   // SUBMIT: FLUXO FUNCIONÁRIO (ATIVAÇÃO DE CONTA)
   // ----------------------------------------------------
-  const handleSubmitFuncionario = (e: React.FormEvent) => {
+  const handleSubmitFuncionario = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: { [key: string]: string } = {};
 
@@ -278,13 +313,14 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
 
     setFuncIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       const targetEmp = empresas.find((e) => e.id === funcEmpresaId) || empresas[0];
 
-      // Register or activate user
-      const funcUser = cadastrarUsuario({
+      // Register or activate user (conta real, compartilhada entre dispositivos)
+      const funcUser = await cadastrarUsuario({
         nome: funcEmail.split('@')[0].replace('.', ' ').toUpperCase(),
         email: funcEmail.trim().toLowerCase(),
+        senha: funcSenha,
         perfil: 'FUNCIONARIO',
         empresaId: targetEmp.id,
       });
@@ -294,7 +330,6 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
 
       setSuccessMessage(`Conta de colaborador ativada com sucesso na ${targetEmp.nomeFantasia}! Acessando o Portal do Colaborador...`);
       setShowSuccessToast(true);
-      setFuncIsSubmitting(false);
 
       logAction('COLABORADOR_CONTA_ATIVADA', 'usuarios', `Colaborador ${funcUser.nome} ativou conta com chave ${cleanCodigo}.`, funcUser.id);
 
@@ -303,7 +338,11 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
           onNavigate('func_portal');
         }
       }, 1400);
-    }, 700);
+    } catch (erro) {
+      setFuncErrors({ email: traduzErroAuth(erro) });
+    } finally {
+      setFuncIsSubmitting(false);
+    }
   };
 
   return (
@@ -343,7 +382,75 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
           </div>
         </div>
 
-        {/* 3 Tabs Selection: Empresa | Candidato | Funcionário */}
+        {/* Toggle: Já tem conta? Entrar */}
+        <div className="px-4 sm:px-6 pt-4 bg-slate-50 text-center border-b border-slate-100">
+          <button
+            type="button"
+            onClick={() => {
+              setModoLogin((prev) => !prev);
+              setLoginError(null);
+            }}
+            className="text-xs font-bold text-[#0A5B7A] hover:underline"
+          >
+            {modoLogin ? '← Voltar para o cadastro' : 'Já tem uma conta? Entrar'}
+          </button>
+        </div>
+
+        {modoLogin ? (
+          <form onSubmit={handleLogin} className="p-6 sm:p-10 space-y-5 max-w-md mx-auto w-full">
+            <div className="text-center mb-2">
+              <h2 className="text-lg font-black text-slate-800">Entrar na sua conta</h2>
+              <p className="text-xs text-slate-500 mt-1">Use o e-mail e a senha cadastrados pela sua empresa ou pelo RH.</p>
+            </div>
+
+            {loginError && (
+              <div className="flex items-start space-x-2 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl p-3">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">E-mail</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-[#0A5B7A]/30 focus:border-[#0A5B7A] outline-none"
+                  placeholder="seu@email.com"
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Senha</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="password"
+                  value={loginSenha}
+                  onChange={(e) => setLoginSenha(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-[#0A5B7A]/30 focus:border-[#0A5B7A] outline-none"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="w-full bg-[#0A5B7A] hover:bg-[#084f6a] text-white font-bold text-sm py-3 rounded-xl transition-colors flex items-center justify-center space-x-2 disabled:opacity-60"
+            >
+              <span>{loginLoading ? 'Entrando...' : 'Entrar'}</span>
+              {!loginLoading && <ArrowRight className="w-4 h-4" />}
+            </button>
+          </form>
+        ) : (
+          <>
         <div className="p-4 sm:p-6 bg-slate-50 border-b border-slate-200">
           <div className="text-center sm:text-left mb-4">
             <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">
@@ -1077,6 +1184,8 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
             </form>
           )}
         </div>
+        </>
+        )}
 
         {/* Footer info & Login Alternative */}
         <div className="bg-slate-50 border-t border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">

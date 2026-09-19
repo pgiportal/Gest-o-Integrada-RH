@@ -59,22 +59,26 @@ export const AdmissoesView: React.FC<AdmissoesViewProps> = ({ onOpenAdmissaoModa
     return true;
   });
 
-  const handleCreateCandidato = (e: React.FormEvent) => {
+  const handleCreateCandidato = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!novoNome || !novoEmail) return;
 
-    cadastrarUsuario({
-      nome: novoNome,
-      email: novoEmail,
-      perfil: 'CANDIDATO',
-      empresaId: currentEmpresa.id,
-    });
+    try {
+      await cadastrarUsuario({
+        nome: novoNome,
+        email: novoEmail,
+        perfil: 'CANDIDATO',
+        empresaId: currentEmpresa.id,
+      });
 
-    setNovoNome('');
-    setNovoEmail('');
-    setNovoCargo('');
-    setIsNovoCandidatoOpen(false);
-    alert('Convite de admissão digital gerado! O candidato já pode acessar o formulário.');
+      setNovoNome('');
+      setNovoEmail('');
+      setNovoCargo('');
+      setIsNovoCandidatoOpen(false);
+      alert('Convite de admissão digital gerado! O candidato já pode acessar o formulário.');
+    } catch (erro) {
+      alert('Não foi possível gerar o convite agora. Tente novamente em instantes.');
+    }
   };
 
   return (

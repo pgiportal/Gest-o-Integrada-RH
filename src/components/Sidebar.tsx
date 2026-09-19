@@ -16,6 +16,7 @@ import {
   Briefcase,
   Info,
   Sparkles,
+  Cloud,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -203,6 +204,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab, onOpe
                 <Database className="w-4 h-4 text-[#F5B800]" />
                 <span>Banco de Dados & Logs</span>
               </div>
+            </button>
+
+            <button
+              onClick={() => onSelectTab('google_drive')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-semibold transition-all ${
+                currentTab === 'google_drive'
+                  ? 'bg-white/15 text-white shadow-xs border-l-4 border-[#F5B800]'
+                  : 'text-teal-100 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <Cloud className="w-4 h-4 text-[#F5B800]" />
+                <span>Google Drive & Nuvem</span>
+              </div>
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
             </button>
           </>
         )}

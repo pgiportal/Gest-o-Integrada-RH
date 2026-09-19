@@ -253,3 +253,29 @@ export interface AuditLog {
   ipOrigem?: string;
   criadoEm: string;
 }
+
+export interface GoogleDriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+  modifiedTime?: string;
+  webViewLink?: string;
+  webContentLink?: string;
+  iconLink?: string;
+  thumbnailLink?: string;
+  parents?: string[];
+  isFolder?: boolean;
+}
+
+export interface GoogleDriveAuthState {
+  isAuthenticated: boolean;
+  user: {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+    photoURL: string | null;
+  } | null;
+  hasToken: boolean;
+  error?: string | null;
+}
