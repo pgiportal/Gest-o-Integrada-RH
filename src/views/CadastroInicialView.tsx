@@ -29,6 +29,7 @@ import { PerfilUsuario, Empresa } from '../types';
 
 interface CadastroInicialViewProps {
   initialTab?: 'empresa' | 'candidato' | 'funcionario';
+  initialLoginMode?: boolean;
   onNavigate?: (tab: string) => void;
   onOpenTermosModal?: () => void;
   onOpenSuporteModal?: () => void;
@@ -36,6 +37,7 @@ interface CadastroInicialViewProps {
 
 export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
   initialTab = 'empresa',
+  initialLoginMode = false,
   onNavigate,
   onOpenTermosModal,
   onOpenSuporteModal,
@@ -53,7 +55,7 @@ export const CadastroInicialView: React.FC<CadastroInicialViewProps> = ({
     login,
   } = useApp();
 
-  const [modoLogin, setModoLogin] = useState(false);
+  const [modoLogin, setModoLogin] = useState(initialLoginMode);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginSenha, setLoginSenha] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);

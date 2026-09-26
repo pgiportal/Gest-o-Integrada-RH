@@ -6,6 +6,7 @@ interface CadastroInicialModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: 'empresa' | 'candidato' | 'funcionario';
+  initialLoginMode?: boolean;
   onNavigate?: (tab: string) => void;
   onOpenTermosModal?: () => void;
   onOpenSuporteModal?: () => void;
@@ -15,6 +16,7 @@ export const CadastroInicialModal: React.FC<CadastroInicialModalProps> = ({
   isOpen,
   onClose,
   initialTab = 'empresa',
+  initialLoginMode = false,
   onNavigate,
   onOpenTermosModal,
   onOpenSuporteModal,
@@ -35,6 +37,7 @@ export const CadastroInicialModal: React.FC<CadastroInicialModalProps> = ({
 
         <CadastroInicialView
           initialTab={initialTab}
+          initialLoginMode={initialLoginMode}
           onNavigate={(tab) => {
             if (onNavigate) onNavigate(tab);
             onClose();

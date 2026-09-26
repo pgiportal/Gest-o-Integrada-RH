@@ -18,6 +18,7 @@ import {
 interface NavbarProps {
   onOpenNewEmpresa?: () => void;
   onOpenCadastroInicial?: (tab?: 'empresa' | 'candidato' | 'funcionario') => void;
+  onOpenLogin?: () => void;
   onNavigateToSchema?: () => void;
   onNavigateToSobre?: () => void;
   onOpenTour?: () => void;
@@ -26,6 +27,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewEmpresa,
   onOpenCadastroInicial,
+  onOpenLogin,
   onNavigateToSchema,
   onNavigateToSobre,
   onOpenTour,
@@ -40,7 +42,14 @@ export const Navbar: React.FC<NavbarProps> = ({
     switchUser,
     logout,
     resetToDefaults,
+    firebaseUid,
   } = useApp();
+
+  // Uma pessoa com login real só deve ver e alternar entre empresas às
+  // quais ela pertence de fato (hoje, apenas a própria). A lista completa
+  // de empresas de exemplo continua disponível apenas no modo demonstração
+  // (sem login real), para quem está conhecendo o sistema.
+  const empresasVisiveis = firebaseUid ? empresas.filter((emp) => emp.id === currentEmpresa.id) : empresas;
 
   const [isTenantOpen, setIsTenantOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -109,7 +118,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                   Empresas Contratantes (Multi-Tenant)
                 </div>
-                {empresas.map((emp) => (
+                {empresasVisiveis.map((emp) => (
                   <button
                     key={emp.id}
                     onClick={() => {
@@ -157,7 +166,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Side: Quick Role Simulator & User Account */}
           <div className="flex items-center space-x-2 sm:space-x-3">
-            {/* Quick RBAC Simulator Pills (Mandatory for easy multi-role testing) */}
+            {/* Quick RBAC Simulator Pills (apenas no modo demonstração, sem login real) */}
+            {!firebaseUid && (
             <div className="hidden lg:flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
               <span className="text-[10px] uppercase font-bold text-slate-400 px-2">Simular Perfil:</span>
               <button
@@ -197,6 +207,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>Candidato (LGPD)</span>
               </button>
             </div>
+            )}
 
             {/* Quick Link to Schema & DDL */}
             {onNavigateToSchema && (
@@ -233,6 +244,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Sparkles className="w-3.5 h-3.5 text-[#0A5B7A]" />
                 <span className="hidden md:inline">Tour Guiado</span>
+              </button>
+            )}
+
+            {/* Botão Entrar (login real), só aparece sem sessão ativa */}
+            {onOpenLogin && !firebaseUid && (
+              <button
+                onClick={onOpenLogin}
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all text-xs font-bold cursor-pointer"
+                title="Entrar com e-mail e senha"
+              >
+                <UserCheck className="w-3.5 h-3.5 text-[#0A5B7A]" />
+                <span className="hidden sm:inline">Entrar</span>
               </button>
             )}
 

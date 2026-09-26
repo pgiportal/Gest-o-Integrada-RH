@@ -78,6 +78,9 @@ interface AppContextType {
   }) => Promise<Usuario>;
   // true enquanto o sistema ainda está verificando se há uma sessão salva.
   autenticando: boolean;
+  // UID do Firebase quando a pessoa está de fato autenticada (login/cadastro
+  // reais). Fica null no modo de demonstração local ("SIMULAR PERFIL").
+  firebaseUid: string | null;
 
   // Admissão & LGPD
   dadosCadastrais: DadosCadastrais[];
@@ -140,6 +143,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [empresas, setEmpresas] = useState<Empresa[]>(INITIAL_EMPRESAS);
   const [usuarios, setUsuarios] = useState<Usuario[]>(INITIAL_USUARIOS);
   const [autenticando, setAutenticando] = useState<boolean>(true);
+  const [firebaseUid, setFirebaseUid] = useState<string | null>(null);
 
   const [selectedEmpresaId, setSelectedEmpresaIdState] = useState<string>(() =>
     loadFromStorage(STORAGE_KEYS.SELECTED_EMPRESA, INITIAL_EMPRESAS[0]?.id || '')
@@ -192,6 +196,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const unsubscribe = observarAuth(async (usuarioFirebase) => {
       if (usuarioFirebase) {
+        setFirebaseUid(usuarioFirebase.uid);
         try {
           const usuarioEncontrado = await buscarUsuarioPorUid(usuarioFirebase.uid);
           if (usuarioEncontrado) {
@@ -201,6 +206,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (erro) {
           console.error('Falha ao carregar perfil do usuário autenticado:', erro);
         }
+      } else {
+        setFirebaseUid(null);
       }
       setAutenticando(false);
     });
@@ -445,6 +452,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     await sairDaConta();
     setCurrentUserState(null);
+    setFirebaseUid(null);
   };
 
   const cadastrarUsuario = async (dados: {
@@ -927,6 +935,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         cadastrarUsuario,
         autenticando,
+        firebaseUid,
 
         dadosCadastrais,
         documentos,

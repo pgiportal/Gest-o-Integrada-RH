@@ -70,9 +70,17 @@ function MainAppContent() {
   const [isTourOpen, setIsTourOpen] = useState(false);
   const [isCadastroModalOpen, setIsCadastroModalOpen] = useState(false);
   const [cadastroModalTab, setCadastroModalTab] = useState<'empresa' | 'candidato' | 'funcionario'>('empresa');
+  const [cadastroModalLoginMode, setCadastroModalLoginMode] = useState(false);
 
   const handleOpenCadastro = (tab?: 'empresa' | 'candidato' | 'funcionario') => {
     setCadastroModalTab(tab || 'empresa');
+    setCadastroModalLoginMode(false);
+    setIsCadastroModalOpen(true);
+  };
+
+  const handleOpenLogin = () => {
+    setCadastroModalTab('empresa');
+    setCadastroModalLoginMode(true);
     setIsCadastroModalOpen(true);
   };
 
@@ -120,6 +128,7 @@ function MainAppContent() {
         onOpenTour={() => setIsTourOpen(true)}
         onOpenCadastroInicial={handleOpenCadastro}
         onOpenNewEmpresa={() => handleOpenCadastro('empresa')}
+        onOpenLogin={handleOpenLogin}
       />
 
       {/* Main Content Area: Sidebar + Screen */}
@@ -138,6 +147,7 @@ function MainAppContent() {
             {currentTab === 'cadastro_inicial' || currentTab === 'cadastro' ? (
               <CadastroInicialView
                 initialTab={cadastroModalTab}
+                initialLoginMode={cadastroModalLoginMode}
                 onNavigate={(t) => setCurrentTab(t)}
                 onOpenTermosModal={() => setIsTermosModalOpen(true)}
                 onOpenSuporteModal={() => setIsSuporteModalOpen(true)}
@@ -304,6 +314,7 @@ function MainAppContent() {
         isOpen={isCadastroModalOpen}
         onClose={() => setIsCadastroModalOpen(false)}
         initialTab={cadastroModalTab}
+        initialLoginMode={cadastroModalLoginMode}
         onNavigate={(tab) => {
           setCurrentTab(tab);
           setIsCadastroModalOpen(false);
